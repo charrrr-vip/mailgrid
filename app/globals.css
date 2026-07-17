@@ -1,26 +1,277 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --shell: #f8f8f9;
+  --primary: #1e3a8a;
+  --primary-dark: #152e6e;
+  --primary-light: #2563eb;
+  --primary-pale: #eff6ff;
+  --secondary: #1e3a8a;
+
+  --background: var(--shell);
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --primary-foreground: #ffffff;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --border: #d1d5db;
+  --ring: var(--primary);
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-light: var(--primary-light);
+  --color-primary-pale: var(--primary-pale);
+  --color-secondary: var(--secondary);
+  --color-shell: var(--shell);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --font-sans: var(--font-outfit);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
+  margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+svg {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+textarea:-webkit-autofill:active,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus,
+select:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px white inset !important;
+  box-shadow: 0 0 0 1000px white inset !important;
+  -webkit-text-fill-color: #111827 !important;
+  color: #111827 !important;
+  background-color: white !important;
+}
+
+.ant-input:-webkit-autofill,
+.ant-input:-webkit-autofill:hover,
+.ant-input:-webkit-autofill:focus,
+.ant-input:-webkit-autofill:active,
+.ant-input-password .ant-input:-webkit-autofill,
+.ant-input-password .ant-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px white inset !important;
+  box-shadow: 0 0 0 1000px white inset !important;
+  -webkit-text-fill-color: #111827 !important;
+  color: #111827 !important;
+  background-color: white !important;
+}
+
+.ant-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  font-weight: 500;
+  box-shadow: none !important;
+}
+
+.ant-btn > span {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.ant-btn-primary {
+  color: #ffffff !important;
+}
+
+.ant-btn-primary > span,
+.ant-btn-primary .anticon {
+  color: #ffffff !important;
+}
+
+button[class~="bg-primary"],
+button[class*="from-[#1E3A8A]"] {
+  color: #ffffff !important;
+}
+
+button[class~="bg-primary"] span,
+button[class~="bg-primary"] svg,
+button[class*="from-[#1E3A8A]"] span,
+button[class*="from-[#1E3A8A]"] svg {
+  color: #ffffff !important;
+}
+
+.ant-btn-default {
+  border-color: #d1d5db !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+.ant-btn-default > span,
+.ant-btn-default .anticon {
+  color: #111827 !important;
+}
+
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-input-password,
+.ant-select-selector,
+.ant-picker {
+  border-color: #d1d5db !important;
+  border-radius: 8px !important;
+}
+
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-input-password .ant-input,
+.ant-select-selector {
+  background-color: #ffffff !important;
+}
+
+.ant-input:focus,
+.ant-input-affix-wrapper-focused,
+.ant-select-focused .ant-select-selector {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px rgba(30, 58, 138, 0.12) !important;
+}
+
+.ant-table-wrapper .ant-table {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th {
+  background: #f9fafb !important;
+  color: #6b7280 !important;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  color: #111827;
+  border-bottom: 1px solid #f3f4f6 !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr:hover > td {
+  background: #f9fafb !important;
+}
+
+.ant-select-dropdown {
+  border-radius: 8px !important;
+}
+
+.ant-form-item-label > label {
+  color: #111827 !important;
+  font-weight: 500;
+}
+
+label {
+  color: #111827;
+}
+
+.ant-dropdown-menu {
+  border-radius: 8px !important;
+  padding: 4px !important;
+}
+
+.mf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.mf-table thead tr {
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.mf-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.mf-table tbody tr {
+  border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.15s ease;
+}
+
+.mf-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.mf-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.mf-table td {
+  padding: 12px 16px;
+  color: #111827;
+  vertical-align: middle;
+}
+
+.mf-table-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: #6b7280;
 }
