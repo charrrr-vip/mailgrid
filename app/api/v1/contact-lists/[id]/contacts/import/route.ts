@@ -1,11 +1,54 @@
 import { ok, fail } from "@/lib/api/response";
 import { requireUser } from "@/lib/api/auth";
 
+export const maxDuration = 300;
+
 type CsvRowError = {
   row: number;
   email: string;
   reason: string;
 };
+
+function parseCsvLine(line: string) {
+  return line.split(",").map((cell) => cell.trim());
+}
+
+function normalizeHeader(header: string) {
+  return header.trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+const EMAIL_HEADERS = new Set([
+  "email",
+  "e-mail",
+  "e_mail",
+  "mail",
+  "email_address",
+  "emailaddress",
+]);
+
+const FIRST_NAME_HEADERS = new Set([
+  "first_name",
+  "firstname",
+  "first",
+  "prenom",
+  "prénom",
+  "given_name",
+  "givenname",
+]);
+
+const LAST_NAME_HEADERS = new Set([
+  "last_name",
+  "lastname",
+  "last",
+  "nom",
+  "surname",
+  "family_name",
+  "familyname",
+]);
+
+function findColumnIndex(headers: string[], aliases: Set<string>) {
+  return headers.findIndex((header) => aliases.has(normalizeHeader(header)));
+}
 
 function parseCsv(text: string) {
   const lines = text
@@ -13,12 +56,23 @@ function parseCsv(text: string) {
     .map((line) => line.trim())
     .filter(Boolean);
 
-  if (lines.length < 2) {
-    return { headers: [], rows: [] as string[][] };
+  if (lines.length === 0) {
+    return { headers: [] as string[], rows: [] as string[][] };
   }
 
-  const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-  const rows = lines.slice(1).map((line) => line.split(",").map((c) => c.trim()));
+  const firstRow = parseCsvLine(lines[0]);
+  const firstCell = (firstRow[0] ?? "").toLowerCase();
+
+  // Headerless CSV: email,first_name,last_name on every line
+  if (firstCell && isValidEmail(firstCell)) {
+    return {
+      headers: ["email", "first_name", "last_name"],
+      rows: lines.map(parseCsvLine),
+    };
+  }
+
+  const headers = firstRow.map(normalizeHeader);
+  const rows = lines.slice(1).map(parseCsvLine);
   return { headers, rows };
 }
 
@@ -52,9 +106,9 @@ export async function POST(
   const content = await file.text();
   const { headers, rows } = parseCsv(content);
 
-  const emailIndex = headers.indexOf("email");
-  const firstNameIndex = headers.indexOf("first_name");
-  const lastNameIndex = headers.indexOf("last_name");
+  const emailIndex = findColumnIndex(headers, EMAIL_HEADERS);
+  const firstNameIndex = findColumnIndex(headers, FIRST_NAME_HEADERS);
+  const lastNameIndex = findColumnIndex(headers, LAST_NAME_HEADERS);
 
   if (emailIndex < 0) {
     return fail("INVALID_CSV", "Required email column is missing", 422);
@@ -94,7 +148,16 @@ export async function POST(
     });
   });
 
-  if (records.length === 0) {
+  const deduped = Array.from(
+    records
+      .reduce((map, record) => {
+        if (!map.has(record.email)) map.set(record.email, record);
+        return map;
+      }, new Map<string, (typeof records)[number]>())
+      .values()
+  );
+
+  if (deduped.length === 0) {
     return ok({
       imported: 0,
       skipped: errors.length,
@@ -102,22 +165,44 @@ export async function POST(
     });
   }
 
-  const { data: inserted, error } = await supabase
-    .from("contacts")
-    .upsert(records, {
-      onConflict: "list_id,email",
-      ignoreDuplicates: true,
-    })
-    .select("id");
+  const BATCH_SIZE = 1000;
+  let imported = 0;
+  let skipped = 0;
 
-  if (error) return fail("IMPORT_FAILED", error.message, 500);
+  for (let i = 0; i < deduped.length; i += BATCH_SIZE) {
+    const batch = deduped.slice(i, i + BATCH_SIZE).map((record) => ({
+      email: record.email,
+      first_name: record.first_name,
+      last_name: record.last_name,
+      custom_fields: record.custom_fields,
+    }));
 
-  const imported = inserted?.length ?? 0;
-  const skipped = rows.length - imported;
+    const { data, error } = await supabase.rpc("import_contacts_bulk", {
+      p_list_id: id,
+      p_contacts: batch,
+    });
+
+    if (error) {
+      if (error.message.includes("import_contacts_bulk")) {
+        return fail(
+          "IMPORT_NOT_CONFIGURED",
+          "Bulk import is not configured yet. Apply database migration 004_bulk_contact_import.sql in Supabase.",
+          500
+        );
+      }
+      return fail("IMPORT_FAILED", error.message, 500);
+    }
+
+    const result = Array.isArray(data) ? data[0] : data;
+    imported += result?.imported_count ?? 0;
+    skipped += result?.skipped_count ?? 0;
+  }
+
+  skipped += errors.length;
 
   return ok({
     imported,
     skipped,
-    errors,
+    errors: errors.slice(0, 100),
   });
 }

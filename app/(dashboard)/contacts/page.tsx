@@ -457,10 +457,11 @@ export default function ContactsPage() {
           <CardContent>
             <form className="space-y-4" onSubmit={handleImportCsv}>
               <p className="text-sm text-gray-600">
-                Upload a CSV file with columns:{" "}
+                Upload a CSV with columns{" "}
                 <code className="rounded bg-gray-100 px-1 text-xs">email</code>,{" "}
                 <code className="rounded bg-gray-100 px-1 text-xs">first_name</code>,{" "}
                 <code className="rounded bg-gray-100 px-1 text-xs">last_name</code>
+                . A header row is optional if the file starts directly with contact rows.
               </p>
               <Input
                 type="file"
