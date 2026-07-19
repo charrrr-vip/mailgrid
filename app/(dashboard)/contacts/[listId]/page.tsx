@@ -38,7 +38,10 @@ type Contact = {
 type ApiResponse<T> = {
   data: T;
   error: { code: string; message: string } | null;
+  meta?: { total?: number; page?: number; limit?: number } | null;
 };
+
+const PAGE_SIZE = 50;
 
 export default function ContactListDetailPage() {
   const params = useParams<{ listId: string }>();
@@ -51,6 +54,8 @@ export default function ContactListDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalContacts, setTotalContacts] = useState(0);
 
   const fetchList = useCallback(async () => {
     const response = await fetch(`/api/v1/contact-lists/${listId}`, { cache: "no-store" });
@@ -63,6 +68,8 @@ export default function ContactListDetailPage() {
 
   const fetchContacts = useCallback(async () => {
     const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(PAGE_SIZE));
     if (statusFilter !== "all") params.set("status", statusFilter);
     if (search.trim()) params.set("search", search.trim());
 
@@ -75,7 +82,8 @@ export default function ContactListDetailPage() {
       throw new Error(payload.error?.message ?? "Failed to load contacts");
     }
     setContacts(payload.data);
-  }, [listId, search, statusFilter]);
+    setTotalContacts(payload.meta?.total ?? payload.data.length);
+  }, [listId, page, search, statusFilter]);
 
   useEffect(() => {
     setLoading(true);
@@ -127,6 +135,10 @@ export default function ContactListDetailPage() {
   }
 
   const listTitle = useMemo(() => list?.name ?? "Contact list", [list?.name]);
+  const totalCount = list?.contact_count ?? totalContacts;
+  const totalPages = Math.max(1, Math.ceil(totalContacts / PAGE_SIZE));
+  const rangeStart = totalContacts === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, totalContacts);
 
   if (loading) {
     return <PageLoader label="Loading contacts..." />;
@@ -144,7 +156,7 @@ export default function ContactListDetailPage() {
         </Link>
         <h1 className="text-3xl font-bold text-gray-900">{listTitle}</h1>
         <p className="mt-1 text-gray-600">
-          {contacts.length} contact{contacts.length !== 1 ? "s" : ""} in this list
+          {totalCount.toLocaleString()} contact{totalCount !== 1 ? "s" : ""} in this list
         </p>
       </div>
 
@@ -166,14 +178,20 @@ export default function ContactListDetailPage() {
             <div className="flex-1">
               <Input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
                 placeholder="Search by email..."
                 icon={<Search className="h-4 w-4" />}
               />
             </div>
             <Select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(1);
+              }}
               className="w-40"
             >
               <option value="all">All statuses</option>
@@ -242,6 +260,36 @@ export default function ContactListDetailPage() {
               )}
             </DataTableBody>
           </DataTable>
+
+          {totalContacts > PAGE_SIZE && (
+            <div className="flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-gray-600">
+                Showing {rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()} of{" "}
+                {totalContacts.toLocaleString()}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1 || actionLoading}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-gray-600">
+                  Page {page} of {totalPages.toLocaleString()}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages || actionLoading}
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
