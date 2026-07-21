@@ -8,7 +8,7 @@ type PageResult<T> = {
 };
 
 export async function fetchAllPages<T>(
-  fetchPage: (from: number, to: number) => Promise<PageResult<T>>,
+  fetchPage: (from: number, to: number) => PromiseLike<PageResult<T>>,
   pageSize = DEFAULT_PAGE_SIZE
 ): Promise<{ data: T[]; error: string | null }> {
   const rows: T[] = [];
@@ -44,7 +44,7 @@ export async function upsertAllPages<T extends Record<string, unknown>, R>(
     const batch = rows.slice(i, i + pageSize);
     const { data, error } = await admin
       .from(table)
-      .upsert(batch, {
+      .upsert(batch as never, {
         onConflict: options.onConflict,
         ignoreDuplicates: options.ignoreDuplicates,
       })
