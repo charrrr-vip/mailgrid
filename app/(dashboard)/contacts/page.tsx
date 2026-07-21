@@ -451,21 +451,21 @@ export default function ContactsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5 text-muted-foreground" />
-              Import CSV
+              Import contacts
             </CardTitle>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleImportCsv}>
               <p className="text-sm text-gray-600">
-                Upload a CSV with columns{" "}
+                Upload a CSV with{" "}
                 <code className="rounded bg-gray-100 px-1 text-xs">email</code>,{" "}
                 <code className="rounded bg-gray-100 px-1 text-xs">first_name</code>,{" "}
                 <code className="rounded bg-gray-100 px-1 text-xs">last_name</code>
-                . A header row is optional if the file starts directly with contact rows.
+                , or a TXT file with one email per line. A header row is optional for CSV.
               </p>
               <Input
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,text/csv,.txt,text/plain"
                 onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
               />
               <Button

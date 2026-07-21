@@ -57,7 +57,7 @@ function parseCsv(text: string) {
     .filter(Boolean);
 
   if (lines.length === 0) {
-    return { headers: [] as string[], rows: [] as string[][] };
+    return { headers: [] as string[], rows: [] as string[][], rowOffset: 1 };
   }
 
   const firstRow = parseCsvLine(lines[0]);
@@ -68,16 +68,51 @@ function parseCsv(text: string) {
     return {
       headers: ["email", "first_name", "last_name"],
       rows: lines.map(parseCsvLine),
+      rowOffset: 1,
     };
   }
 
   const headers = firstRow.map(normalizeHeader);
   const rows = lines.slice(1).map(parseCsvLine);
-  return { headers, rows };
+  return { headers, rows, rowOffset: 2 };
 }
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isTextEmailListFile(file: File) {
+  const name = file.name.toLowerCase();
+  return name.endsWith(".txt") || file.type === "text/plain";
+}
+
+function parseEmailListText(text: string) {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    return { headers: [] as string[], rows: [] as string[][], rowOffset: 1 };
+  }
+
+  const firstLine = lines[0];
+  const hasHeader =
+    EMAIL_HEADERS.has(normalizeHeader(firstLine)) && !isValidEmail(firstLine.toLowerCase());
+  const dataLines = hasHeader ? lines.slice(1) : lines;
+
+  return {
+    headers: ["email", "first_name", "last_name"],
+    rows: dataLines.map((email) => [email]),
+    rowOffset: hasHeader ? 2 : 1,
+  };
+}
+
+function parseImportFile(content: string, file: File) {
+  if (isTextEmailListFile(file)) {
+    return parseEmailListText(content);
+  }
+  return parseCsv(content);
 }
 
 export async function POST(
@@ -100,18 +135,24 @@ export async function POST(
   const formData = await request.formData().catch(() => null);
   const file = formData?.get("file");
   if (!(file instanceof File)) {
-    return fail("INVALID_FILE", "CSV file is missing", 422);
+    return fail("INVALID_FILE", "Import file is missing", 422);
+  }
+
+  const allowedExtensions = [".csv", ".txt"];
+  const lowerName = file.name.toLowerCase();
+  if (!allowedExtensions.some((ext) => lowerName.endsWith(ext))) {
+    return fail("INVALID_FILE", "Only CSV or TXT files are supported", 422);
   }
 
   const content = await file.text();
-  const { headers, rows } = parseCsv(content);
+  const { headers, rows, rowOffset } = parseImportFile(content, file);
 
   const emailIndex = findColumnIndex(headers, EMAIL_HEADERS);
   const firstNameIndex = findColumnIndex(headers, FIRST_NAME_HEADERS);
   const lastNameIndex = findColumnIndex(headers, LAST_NAME_HEADERS);
 
   if (emailIndex < 0) {
-    return fail("INVALID_CSV", "Required email column is missing", 422);
+    return fail("INVALID_FILE", "Required email column is missing", 422);
   }
 
   const errors: CsvRowError[] = [];
@@ -124,7 +165,7 @@ export async function POST(
   }> = [];
 
   rows.forEach((cells, idx) => {
-    const rowNumber = idx + 2;
+    const rowNumber = idx + rowOffset;
     const email = (cells[emailIndex] ?? "").trim().toLowerCase();
     if (!email || !isValidEmail(email)) {
       errors.push({ row: rowNumber, email, reason: "invalid_email" });

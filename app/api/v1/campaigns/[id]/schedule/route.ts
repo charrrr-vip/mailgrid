@@ -2,6 +2,9 @@ import PgBoss from "pg-boss";
 import { ok, fail } from "@/lib/api/response";
 import { requireUser } from "@/lib/api/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllPages, upsertAllPages } from "@/lib/supabase/fetch-all-pages";
+
+export const maxDuration = 300;
 
 type CampaignRow = {
   id: string;
@@ -9,6 +12,18 @@ type CampaignRow = {
   status: "draft" | "scheduled" | "sending" | "paused" | "completed" | "cancelled";
   list_id: string | null;
   template_id: string | null;
+};
+
+type ContactRow = {
+  id: string;
+  email: string;
+  status: string;
+};
+
+type EmailSendRow = {
+  id: string;
+  campaign_id: string;
+  contact_id: string;
 };
 
 function buildIdempotencyKey(campaignId: string, contactId: string) {
@@ -46,32 +61,41 @@ export async function POST(
   }
 
   const admin = createAdminClient();
-  const { data: contacts, error: contactsError } = await admin
-    .from("contacts")
-    .select("id,email,status")
-    .eq("list_id", campaign.list_id)
-    .eq("status", "active");
+  const { data: contacts, error: contactsError } = await fetchAllPages<ContactRow>(
+    (from, to) =>
+      admin
+        .from("contacts")
+        .select("id,email,status")
+        .eq("list_id", campaign.list_id!)
+        .eq("status", "active")
+        .order("id", { ascending: true })
+        .range(from, to)
+  );
 
-  if (contactsError) return fail("CONTACTS_FETCH_FAILED", contactsError.message, 500);
-  if (!contacts || contacts.length === 0) {
+  if (contactsError) return fail("CONTACTS_FETCH_FAILED", contactsError, 500);
+  if (contacts.length === 0) {
     return fail("EMPTY_AUDIENCE", "No active contacts in this list", 422);
   }
 
   const emailSendsPayload = contacts.map((contact) => ({
     campaign_id: campaign.id,
     contact_id: contact.id,
-    status: "pending",
+    status: "pending" as const,
     idempotency_key: buildIdempotencyKey(campaign.id, contact.id),
   }));
 
-  const { data: inserted, error: insertError } = await admin
-    .from("email_sends")
-    .upsert(emailSendsPayload, { onConflict: "campaign_id,contact_id", ignoreDuplicates: true })
-    .select("id,campaign_id,contact_id");
+  const { data: inserted, error: insertError } = await upsertAllPages<
+    (typeof emailSendsPayload)[number],
+    EmailSendRow
+  >(admin, "email_sends", emailSendsPayload, {
+    onConflict: "campaign_id,contact_id",
+    ignoreDuplicates: true,
+    select: "id,campaign_id,contact_id",
+  });
 
-  if (insertError) return fail("EMAIL_SENDS_CREATE_FAILED", insertError.message, 500);
+  if (insertError) return fail("EMAIL_SENDS_CREATE_FAILED", insertError, 500);
 
-  const total = inserted?.length ?? 0;
+  const total = inserted.length;
   if (total === 0) {
     return fail("NOTHING_TO_SEND", "No new recipients to enqueue", 422);
   }
@@ -116,15 +140,20 @@ export async function POST(
   const boss = new PgBoss(databaseUrl);
   try {
     await boss.start();
-    await Promise.all(
-      inserted.map((item) =>
-        boss.send("send-email", {
-          emailSendId: item.id,
-          campaignId: item.campaign_id,
-          contactId: item.contact_id,
-        })
-      )
-    );
+
+    const ENQUEUE_BATCH = 200;
+    for (let i = 0; i < inserted.length; i += ENQUEUE_BATCH) {
+      const batch = inserted.slice(i, i + ENQUEUE_BATCH);
+      await Promise.all(
+        batch.map((item) =>
+          boss.send("send-email", {
+            emailSendId: item.id,
+            campaignId: item.campaign_id,
+            contactId: item.contact_id,
+          })
+        )
+      );
+    }
   } catch (error) {
     return fail(
       "QUEUE_ENQUEUE_FAILED",
