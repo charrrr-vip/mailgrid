@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
 
 type RawContact = {
   email: string;
@@ -28,7 +29,8 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const range = searchParams.get("range") || "30d";
-    const limit = Math.min(200, Math.max(1, Number(searchParams.get("limit") ?? "100")));
+    const selectedCampaignId = searchParams.get("campaign_id");
+    const selectedStatus = searchParams.get("status");
 
     let dateFilter: Date | null = null;
     if (range === "7d") {
@@ -39,10 +41,14 @@ export async function GET(request: Request) {
       dateFilter = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     }
 
-    const { data: campaigns } = await supabase
+    let campaignsQuery = supabase
       .from("campaigns")
       .select("id, name")
       .eq("user_id", user.id);
+    if (selectedCampaignId && selectedCampaignId !== "all") {
+      campaignsQuery = campaignsQuery.eq("id", selectedCampaignId);
+    }
+    const { data: campaigns } = await campaignsQuery;
 
     if (!campaigns || campaigns.length === 0) {
       return NextResponse.json({ data: [], error: null });
@@ -51,33 +57,48 @@ export async function GET(request: Request) {
     const campaignIds = campaigns.map((c) => c.id);
     const campaignMap = new Map(campaigns.map((c) => [c.id, c.name]));
 
-    let query = supabase
-      .from("email_sends")
-      .select(
+    const { data: sends, error } = await fetchAllPages<
+      {
+        id: string;
+        status: string;
+        campaign_id: string;
+        sent_at: string | null;
+        created_at: string | null;
+        provider_message_id: string | null;
+        error_message: string | null;
+        contacts: RawContact | RawContact[] | null;
+      }
+    >((from, to) => {
+      let query = supabase
+        .from("email_sends")
+        .select(
+          `
+          id,
+          status,
+          campaign_id,
+          sent_at,
+          created_at,
+          provider_message_id,
+          error_message,
+          contacts ( email, first_name, last_name )
         `
-        id,
-        status,
-        campaign_id,
-        sent_at,
-        created_at,
-        provider_message_id,
-        error_message,
-        contacts ( email, first_name, last_name )
-      `
-      )
-      .in("campaign_id", campaignIds)
-      .order("created_at", { ascending: false })
-      .limit(limit);
+        )
+        .in("campaign_id", campaignIds)
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
-    if (dateFilter) {
-      query = query.gte("created_at", dateFilter.toISOString());
-    }
-
-    const { data: sends, error } = await query;
+      if (dateFilter) {
+        query = query.gte("created_at", dateFilter.toISOString());
+      }
+      if (selectedStatus && selectedStatus !== "all") {
+        query = query.eq("status", selectedStatus);
+      }
+      return query;
+    });
 
     if (error) {
       return NextResponse.json(
-        { data: null, error: { code: "DB_ERROR", message: error.message } },
+        { data: null, error: { code: "DB_ERROR", message: error } },
         { status: 500 }
       );
     }
@@ -101,7 +122,11 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({ data: enriched, error: null });
+    return NextResponse.json({
+      data: enriched,
+      error: null,
+      meta: { total: enriched.length },
+    });
   } catch (e) {
     return NextResponse.json(
       {

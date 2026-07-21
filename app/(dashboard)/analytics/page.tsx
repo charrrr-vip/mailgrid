@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart3,
@@ -58,18 +58,36 @@ const dateRanges = [
   { value: "all", label: "All time" },
 ];
 
+const sendStatusOptions = [
+  { value: "all", label: "All send statuses" },
+  { value: "pending", label: "Pending" },
+  { value: "sent", label: "Sent" },
+  { value: "delivered", label: "Delivered" },
+  { value: "opened", label: "Opened" },
+  { value: "clicked", label: "Clicked" },
+  { value: "bounced", label: "Bounced" },
+  { value: "complained", label: "Complained" },
+  { value: "failed", label: "Failed" },
+];
+
+const SENDS_PAGE_SIZE = 50;
+
 export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [dateRange, setDateRange] = useState("30d");
   const [selectedCampaign, setSelectedCampaign] = useState<string>("all");
+  const [selectedSendStatus, setSelectedSendStatus] = useState<string>("all");
+  const [sendsPage, setSendsPage] = useState(1);
   const [data, setData] = useState<AnalyticsData | null>(null);
 
   const fetchAnalytics = useCallback(async () => {
     try {
       const [campaignsRes, sendsRes, eventsRes] = await Promise.all([
         fetch("/api/v1/campaigns"),
-        fetch("/api/v1/analytics/sends?range=" + dateRange),
+        fetch(
+          `/api/v1/analytics/sends?range=${dateRange}&campaign_id=${selectedCampaign}&status=${selectedSendStatus}`
+        ),
         fetch("/api/v1/analytics/events?range=" + dateRange),
       ]);
 
@@ -89,10 +107,7 @@ export default function AnalyticsPage() {
         events = eventsJson.data || [];
       }
 
-      const filteredSends =
-        selectedCampaign === "all"
-          ? sends
-          : sends.filter((s) => s.campaign_id === selectedCampaign);
+      const filteredSends = sends;
 
       const sendIds = new Set(filteredSends.map((s) => s.id));
       const filteredEvents = events.filter((e) => sendIds.has(e.email_send_id));
@@ -116,7 +131,11 @@ export default function AnalyticsPage() {
         totals: { sent: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0, failed: 0 },
       });
     }
-  }, [dateRange, selectedCampaign]);
+  }, [dateRange, selectedCampaign, selectedSendStatus]);
+
+  useEffect(() => {
+    setSendsPage(1);
+  }, [dateRange, selectedCampaign, selectedSendStatus]);
 
   useEffect(() => {
     setLoading(true);
@@ -148,7 +167,14 @@ export default function AnalyticsPage() {
   const bounceRate = totals.sent > 0 ? ((totals.bounced / totals.sent) * 100).toFixed(1) : "0.0";
 
   const recentEvents = events.slice(0, 50);
-  const recentSends = sends.slice(0, 50);
+  const sendsTotal = sends.length;
+  const sendsTotalPages = Math.max(1, Math.ceil(sendsTotal / SENDS_PAGE_SIZE));
+  const paginatedSends = useMemo(() => {
+    const from = (sendsPage - 1) * SENDS_PAGE_SIZE;
+    return sends.slice(from, from + SENDS_PAGE_SIZE);
+  }, [sends, sendsPage]);
+  const sendsRangeStart = sendsTotal === 0 ? 0 : (sendsPage - 1) * SENDS_PAGE_SIZE + 1;
+  const sendsRangeEnd = Math.min(sendsPage * SENDS_PAGE_SIZE, sendsTotal);
 
   return (
     <div className="space-y-6">
@@ -212,6 +238,20 @@ export default function AnalyticsPage() {
               {campaigns.map((campaign) => (
                 <option key={campaign.id} value={campaign.id}>
                   {campaign.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Send className="h-4 w-4 text-blue-600" />
+            <Select
+              value={selectedSendStatus}
+              onChange={(e) => setSelectedSendStatus(e.target.value)}
+              className="w-52"
+            >
+              {sendStatusOptions.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
                 </option>
               ))}
             </Select>
@@ -351,11 +391,40 @@ export default function AnalyticsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Send className="h-4 w-4 text-blue-600" />
-            Email Sends Monitor
+            Email Sends Monitor ({sendsTotal.toLocaleString()})
           </CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <SendsMonitorTable sends={recentSends} />
+        <CardContent className="space-y-4 overflow-x-auto">
+          <SendsMonitorTable sends={paginatedSends} />
+          {sendsTotal > SENDS_PAGE_SIZE && (
+            <div className="flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-gray-600">
+                Showing {sendsRangeStart.toLocaleString()}–{sendsRangeEnd.toLocaleString()} of{" "}
+                {sendsTotal.toLocaleString()}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={sendsPage <= 1}
+                  onClick={() => setSendsPage((current) => Math.max(1, current - 1))}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-gray-600">
+                  Page {sendsPage.toLocaleString()} of {sendsTotalPages.toLocaleString()}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={sendsPage >= sendsTotalPages}
+                  onClick={() => setSendsPage((current) => Math.min(sendsTotalPages, current + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
