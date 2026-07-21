@@ -92,8 +92,12 @@ export async function DELETE(
     .single();
 
   if (fetchError) return fail("CAMPAIGN_NOT_FOUND", "Campaign not found", 404);
-  if (campaign.status !== "draft") {
-    return fail("CAMPAIGN_DELETE_FORBIDDEN", "Only draft campaigns can be deleted", 409);
+  if (campaign.status === "sending") {
+    return fail(
+      "CAMPAIGN_DELETE_FORBIDDEN",
+      "Cannot delete a campaign while it is sending",
+      409
+    );
   }
 
   const { error } = await supabase

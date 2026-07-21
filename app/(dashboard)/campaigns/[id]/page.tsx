@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
+import { DeleteCampaignButton } from "@/components/campaigns/DeleteCampaignButton";
 import {
   EventsMonitorTable,
   type MonitorEventRow,
@@ -147,11 +148,16 @@ export default async function CampaignDetailsPage({
             </div>
           </div>
         </div>
-        <Link href="/analytics">
-          <Button variant="outline">
-            View Full Analytics
-          </Button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/analytics">
+            <Button variant="outline">View Full Analytics</Button>
+          </Link>
+          <DeleteCampaignButton
+            campaignId={campaign.id}
+            campaignName={campaign.name}
+            status={campaign.status}
+          />
+        </div>
       </div>
 
       {/* Stats Grid */}

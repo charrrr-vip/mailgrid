@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { PageLoader } from "@/components/ui/spinner";
+import { DeleteCampaignButton } from "@/components/campaigns/DeleteCampaignButton";
 
 type Template = { id: string; name: string };
 type ContactList = { id: string; name: string };
@@ -303,6 +304,19 @@ export default function CampaignsPage() {
                     <BarChart3 className="h-4 w-4" />
                     View Analytics
                   </Button>
+                  <DeleteCampaignButton
+                    campaignId={selectedCampaign.id}
+                    campaignName={selectedCampaign.name}
+                    status={selectedCampaign.status}
+                    onDeleted={() => {
+                      setCampaigns((prev) => {
+                        const next = prev.filter((item) => item.id !== selectedCampaign.id);
+                        setSelectedCampaignId(next[0]?.id ?? "");
+                        return next;
+                      });
+                      setSuccess("Campaign deleted.");
+                    }}
+                  />
                 </div>
                 {!["draft", "scheduled"].includes(selectedCampaign.status) && (
                   <p className="mt-3 text-sm text-gray-500">
