@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart3,
@@ -88,7 +88,7 @@ export default function AnalyticsPage() {
         fetch(
           `/api/v1/analytics/sends?range=${dateRange}&campaign_id=${selectedCampaign}&status=${selectedSendStatus}`
         ),
-        fetch("/api/v1/analytics/events?range=" + dateRange),
+        fetch(`/api/v1/analytics/events?range=${dateRange}&campaign_id=${selectedCampaign}`),
       ]);
 
       const campaignsJson = await campaignsRes.json();
@@ -114,11 +114,11 @@ export default function AnalyticsPage() {
 
       const totals = {
         sent: filteredSends.filter((s) => s.status !== "pending").length,
-        delivered: filteredEvents.filter((e) => e.event_type === "delivered").length,
-        opened: filteredEvents.filter((e) => e.event_type === "opened").length,
-        clicked: filteredEvents.filter((e) => e.event_type === "clicked").length,
-        bounced: filteredEvents.filter((e) => e.event_type === "bounced").length,
-        complained: filteredEvents.filter((e) => e.event_type === "complained").length,
+        delivered: filteredSends.filter((s) => s.status === "delivered").length,
+        opened: filteredSends.filter((s) => s.status === "opened").length,
+        clicked: filteredSends.filter((s) => s.status === "clicked").length,
+        bounced: filteredSends.filter((s) => s.status === "bounced").length,
+        complained: filteredSends.filter((s) => s.status === "complained").length,
         failed: filteredSends.filter((s) => s.status === "failed").length,
       };
 
@@ -169,10 +169,8 @@ export default function AnalyticsPage() {
   const recentEvents = events.slice(0, 50);
   const sendsTotal = sends.length;
   const sendsTotalPages = Math.max(1, Math.ceil(sendsTotal / SENDS_PAGE_SIZE));
-  const paginatedSends = useMemo(() => {
-    const from = (sendsPage - 1) * SENDS_PAGE_SIZE;
-    return sends.slice(from, from + SENDS_PAGE_SIZE);
-  }, [sends, sendsPage]);
+  const sendsPageStart = (sendsPage - 1) * SENDS_PAGE_SIZE;
+  const paginatedSends = sends.slice(sendsPageStart, sendsPageStart + SENDS_PAGE_SIZE);
   const sendsRangeStart = sendsTotal === 0 ? 0 : (sendsPage - 1) * SENDS_PAGE_SIZE + 1;
   const sendsRangeEnd = Math.min(sendsPage * SENDS_PAGE_SIZE, sendsTotal);
 

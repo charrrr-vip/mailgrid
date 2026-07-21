@@ -53,6 +53,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const range = searchParams.get("range") || "30d";
+    const selectedCampaignId = searchParams.get("campaign_id");
     const limit = Math.min(200, Math.max(1, Number(searchParams.get("limit") ?? "100")));
 
     let dateFilter: Date | null = null;
@@ -64,10 +65,14 @@ export async function GET(request: Request) {
       dateFilter = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     }
 
-    const { data: campaigns } = await supabase
+    let campaignsQuery = supabase
       .from("campaigns")
       .select("id")
       .eq("user_id", user.id);
+    if (selectedCampaignId && selectedCampaignId !== "all") {
+      campaignsQuery = campaignsQuery.eq("id", selectedCampaignId);
+    }
+    const { data: campaigns } = await campaignsQuery;
 
     if (!campaigns || campaigns.length === 0) {
       return NextResponse.json({ data: [], error: null });
@@ -75,10 +80,16 @@ export async function GET(request: Request) {
 
     const campaignIds = campaigns.map((c) => c.id);
 
-    const { data: sends } = await supabase
+    let sendsQuery = supabase
       .from("email_sends")
       .select("id")
-      .in("campaign_id", campaignIds);
+      .in("campaign_id", campaignIds)
+      .order("created_at", { ascending: false })
+      .limit(1000);
+    if (dateFilter) {
+      sendsQuery = sendsQuery.gte("created_at", dateFilter.toISOString());
+    }
+    const { data: sends } = await sendsQuery;
 
     if (!sends || sends.length === 0) {
       return NextResponse.json({ data: [], error: null });
